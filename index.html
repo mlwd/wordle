@@ -9,6 +9,9 @@
   .letter-correct {background-color: darkgreen;}
   .letter-included {background-color: gold;}
   .letter-excluded {background-color: gray;}
+  .message-red {background-color: red;}
+  .message-green {background-color: darkgreen;}
+  .message-invisible {visibility: hidden;}
 </style>
 <script>
   // Flag for displaying additional colored div elements which can be used
@@ -25,29 +28,47 @@
     }
   }
 
-  var letter_values = Array(6);
-  var letter_classes = Array(6);
-  var key_classes = new Map();
-  for (let row = 0; row < 6; ++row)
-  {
-    letter_values[row] = Array(5).fill("");
-    letter_classes[row] = Array(5).fill("letter");
-  }
-
   var main_div; // Main drawing area.
   const letter_elements = Array(6); // Letter elements for each row.
   const solution_letters = Array(5); // One row of letter elements for the solution word.
-  var message_red = {visibility: "hidden"}; // Message area with red background.
-  var message_green = {visibility: "hidden"}; // Message area with green background.
-  var current_row = 0; // Current input row for letters.
-  var current_col = 0; // Current input column for letters.
+  var message_elem; // Message element to show texts for the user.
   const keys = new Map(); // Keyboard elements for A-Z, Enter and Backspace.
   const word_list = getWordList();
-  const solution_word = word_list[Math.floor(Math.random() * word_list.length)]
-  var found_word = false; // Whether the correct word has been guessed.
-  console.log("Solution: " + solution_word);
 
-  function createLettersAndKeys()
+  var current_row = 0;           // Current input row for letters.
+  var current_col = 0;           // Current input column for letters.
+  var letter_values = Array(6);  // Letters which have been typed.
+  var letter_classes = Array(6); // CSS classes for each typed letter.
+  var key_classes = new Map();   // CSS class for each key id.
+  var solution_word;             // The word to be found.
+  var found_word;                // Whether the correct word has been guessed.
+  var message_class;             // CSS class for the message element.
+  var message_text;              // Text for the message element.
+
+  // Initialize variables holding the state of play.
+  // DOM elements are not created or modified here.
+  function initGameState()
+  {
+    current_row = 0;
+    current_col = 0;
+    letter_values = Array(6);
+    letter_classes = Array(6);
+    key_classes = new Map();
+    for (let row = 0; row < 6; ++row)
+    {
+      letter_values[row] = Array(5).fill("");
+      letter_classes[row] = Array(5).fill("letter");
+    }
+    solution_word = word_list[Math.floor(Math.random() * word_list.length)]
+    console.log("Solution: " + solution_word);
+    found_word = false; // Whether the correct word has been guessed.
+    message_class = "message-invisible";
+    message_text = "";
+  }
+
+  // Creates the necessary DOM elements for the game.
+  // The state of the game is not modified.
+  function initGameElements()
   {
     if (main_div)
       main_div.remove();
@@ -57,12 +78,12 @@
     // Calculate letter and keybord dimensions.
     const width = window.innerWidth;
     const height = window.innerHeight;
-    const a = Math.min(width / 5.6, height / 11.1);
-    const b = a * 5.6 / 11.1;
+    const a = Math.min(width / 5.6, height / 11.8);
+    const b = a * 5.6 / 11.8
     const w = 5.6 * a;
-    const h = 11.1 * a;
+    const h = 11.8 * a;
     const left_off = 0.5 * Math.max(width - 5.6 * a, 0.);
-    const top_off = 0.5 * Math.max(height - 11.1 * a, 0.);
+    const top_off = 0.5 * Math.max(height - 11.8 * a, 0.);
 
     // Set font size.
     const letter_font_size = a / 2;
@@ -82,6 +103,18 @@
       main_div.appendChild(border_div);
     }
 
+    // Create a first row with menu elements.
+    {
+      const restart_div = document.createElement("div");
+      let style = "background-color: lightgray; position: absolute; border-radius: " + 0.3  * a + "px;";
+      style += " left: " + (left_off + 0.1 * a) + "px; top: " + (top_off + 0.1 * a) + "px;";
+      style += " width: " + 5.4 * a + "px; height: " + 0.6 * a + "px;";
+      restart_div.setAttribute("style", style);
+      restart_div.innerText = "Restart";
+      main_div.appendChild(restart_div);
+      restart_div.addEventListener("click", startGame);
+    }
+
     // Create six rows with five letters in each row.
     for (let r = 0; r < 6; r++)
     {
@@ -89,7 +122,7 @@
       for (let c = 0; c < 5; c++)
       {
         const l = left_off + (0.1 + 1.1 * c) * a;
-        const t = top_off + (0.1 + 1.1 * r) * a;
+        const t = top_off + (0.8 + 1.1 * r) * a;
         const elem = document.createElement("div");
         let style = "position: absolute;";
         style += " width: " + a + "px; height: " + a + "px;";
@@ -108,7 +141,7 @@
     for (let c = 0; c < 5; c++)
     {
       const l = left_off + (0.1 + 1.1 * c) * a;
-      const t = top_off + 6.7 * a;
+      const t = top_off + 7.4 * a;
       const elem = document.createElement("div");
       let style = "position: absolute;"
       if (show_debug)
@@ -123,23 +156,20 @@
     }
 
     // Create a message area on top of the solution letters.
-    function createMessageElement(message, bgcolor)
     {
       const l = left_off + 0.3 * a;
-      const t = top_off + 6.9 * a;
-      message.elem = document.createElement("div");
+      const t = top_off + 7.6 * a;
+      message_elem = document.createElement("div");
       let style = "position: absolute;"
       style += "left: " + left_off + "px; top: " + top_off + "px;";
       style += "width: " + 5.0 * a + "px; height: " + 0.6 * a + "px;";
       style += " top: " + t + "px; left: " + l + "px;";
-      style += " background-color: " + bgcolor + ";";
       style += " border-radius: " + 0.3 * a + "px;";
-      message.elem.setAttribute("style", style);
-      setMessageText(message, message.text);
-      main_div.appendChild(message.elem);
+      message_elem.setAttribute("style", style);
+      message_elem.setAttribute("class", message_class);
+      message_elem.innerText = message_text;
+      main_div.appendChild(message_elem);
     }
-    createMessageElement(message_red, "red");
-    createMessageElement(message_green, "green");
 
     // Create a keyboard with three rows.
     function createKeyBoardRow(row, row_keys)
@@ -152,7 +182,7 @@
       for (let col = 0; col < row_keys.length; ++col)
       {
         const key_id = row_keys[col].keyId;
-        const t = top_off + (7.8 + 1.1 * row) * a;
+        const t = top_off + (8.5 + 1.1 * row) * a;
         const elem = document.createElement("div");
         let style = "position: absolute;";
         style += " width: " + row_keys[col].keyWidth * b + "px; height: " + a + "px;";
@@ -207,13 +237,14 @@
   }
 
   // Register event listeners.
-  document.addEventListener("DOMContentLoaded", createLettersAndKeys);
+  document.addEventListener("DOMContentLoaded", startGame);
   document.addEventListener("keydown", processKeyDown);
-  window.addEventListener("resize", processResize);
+  window.addEventListener("resize", initGameElements);
 
-  function processResize()
+  function startGame()
   {
-    createLettersAndKeys();
+    initGameState();
+    initGameElements();
   }
 
   function processKeyDown(event)
@@ -222,11 +253,12 @@
       processKey(event.key.toUpperCase());
   }
 
-  function setMessageText(message, text)
+  function setMessageTextAndClass(new_message_text, new_message_class)
   {
-    message.elem.innerText = text;
-    message.elem.style.visibility = text ? "visible" : "hidden";
-    message.text = text;
+    message_class = new_message_class;
+    message_elem.className = new_message_class;
+    message_text = new_message_text;
+    message_elem.innerText = new_message_text;
   }
 
   function processKey(key)
@@ -247,7 +279,7 @@
     }
     else if (key == "BACKSPACE")
     {
-      setMessageText(message_red, "");
+      setMessageTextAndClass("", "message-hidden");
       if (current_col > 0)
       {
         --current_col;
@@ -262,7 +294,7 @@
         const current_word = getCurrentWord();
         if (!word_list.includes(current_word))
         {
-          setMessageText(message_red, "Not in word list.");
+          setMessageTextAndClass("Not in word list.", "message-red");
         }
         else
         {
@@ -311,7 +343,7 @@
           if (current_word == solution_word)
           {
             found_word = true;
-            setMessageText(message_green, getWinMessage());
+            setMessageTextAndClass(getWinMessage(), "message-green");
           }
           else if (current_row == 5)
           {
