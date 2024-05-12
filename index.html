@@ -17,18 +17,21 @@
   // Flag for displaying additional colored div elements which can be used
   // to gauge whether everything is positioned correctly.
   let show_debug = false;
+  let debug_width = 0;
+  let debug_height = 0;
   const url_index = document.URL.indexOf("?");
   if (url_index != -1)
   {
-    const search_params = document.URL.slice(url_index + 1);
-    const show_debug_str = new URLSearchParams(search_params).get("show_debug");
-    if (show_debug_str == "true")
-    {
-      show_debug = true;
-    }
+    const search_params = new URLSearchParams(document.URL.slice(url_index + 1));
+    show_debug = search_params.get("show_debug") == "true";
+    debug_width = +search_params.get("debug_width");
+    debug_height = +search_params.get("debug_height");
   }
+  console.log("show_debug: " + show_debug);
+  console.log("debug_width: " + debug_width);
+  console.log("debug_height: " + debug_height);
 
-  var main_div; // Main drawing area.
+  var container_ui = {};
   const letter_elements = Array(6); // Letter elements for each row.
   const solution_letters = Array(5); // One row of letter elements for the solution word.
   var message_elem; // Message element to show texts for the user.
@@ -44,6 +47,8 @@
   var found_word;                // Whether the correct word has been guessed.
   var message_class;             // CSS class for the message element.
   var message_text;              // Text for the message element.
+  var statistics;                // Statistics about the number of won an lost games.
+  var page;                      // Either "game" or "statistics".
 
   // Initialize variables holding the state of play.
   // DOM elements are not created or modified here.
@@ -64,55 +69,88 @@
     found_word = false; // Whether the correct word has been guessed.
     message_class = "message-invisible";
     message_text = "";
+    statistics = readStatisticsCookie();
+    page = "game";
+  }
+
+  function createContainerUI()
+  {
+    if (container_ui.main_div)
+      container_ui.main_div.remove();
+    container_ui.main_div = document.createElement("div");
+    document.body.appendChild(container_ui.main_div);
+
+    // Calculate letter and keybord dimensions.
+    const width = debug_width  || window.innerWidth;
+    const height = debug_height || window.innerHeight;
+    container_ui.a = Math.min(width / 5.6, height / 11.8);
+    container_ui.w = Math.max(5.6 * container_ui.a, width);
+    container_ui.b = container_ui.w / 11.1;
+    container_ui.h = 11.8 * container_ui.a;
+    container_ui.left_off = 0.5 * Math.max(window.innerWidth - width, 0.);
+    container_ui.top_off = 0.5 * Math.max(height - 11.8 * container_ui.a, 0.);
+
+    // Set font size.
+    container_ui.letter_font_size = container_ui.a / 2;
+    font_size = container_ui.a / 3.5;
+    let main_style = "font-size: " + font_size + "px;";
+    if (show_debug)
+      main_style += " background-color: red;";
+    container_ui.main_div.setAttribute("style", main_style);
+
+    // Use green and blue backgrounds to show the screen and drawing area.
+    if (show_debug)
+    {
+      createDiv(0.5 * (window.innerWidth - width), 0, width, height, {"background-color": "green"}, "");
+      createDiv(container_ui.left_off, container_ui.top_off, container_ui.w, container_ui.h, {"background-color": "blue"}, "");
+    }
+  }
+
+  // Create a div element and insert it into the main container element.
+  function createDiv(l, t, w, h, props, inner_text = "", font_size = "")
+  {
+    const div = document.createElement("div");
+    let style =  "position: absolute;";
+    { // Add properties to the style string.
+      if (props.hasOwnProperty("border-radius"))
+        style += " border-radius: " + props["border-radius"] + "px;";
+      if (props.hasOwnProperty("background-color"))
+        style += " background-color: " + props["background-color"] + ";";
+    }
+    if (font_size)
+      style += " font-size: " + font_size + "px;";
+    style += " left: " + l + "px; top: " + t + "px;";
+    style += " width: " + w + "px; height: " + h + "px;";
+    div.setAttribute("style", style);
+    div.innerHTML = inner_text;
+    container_ui.main_div.appendChild(div);
+    return div;
   }
 
   // Creates the necessary DOM elements for the game.
   // The state of the game is not modified.
   function initGameElements()
   {
-    if (main_div)
-      main_div.remove();
-    main_div = document.createElement("div");
-    document.body.appendChild(main_div);
-
-    // Calculate letter and keybord dimensions.
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const a = Math.min(width / 5.6, height / 11.8);
-    const b = a * 5.6 / 11.8
-    const w = 5.6 * a;
-    const h = 11.8 * a;
-    const left_off = 0.5 * Math.max(width - 5.6 * a, 0.);
-    const top_off = 0.5 * Math.max(height - 11.8 * a, 0.);
-
-    // Set font size.
-    const letter_font_size = a / 2;
-    const font_size = a / 3.5;
-    let main_style = "font-size: " + font_size + "px;";
-    if (show_debug)
-      main_style += " background-color: red;";
-    main_div.style = main_style;
-
-    if (show_debug)
-    { // Display the bounding box where all elements are placed.
-      const border_div = document.createElement("div");
-      let style = "background-color: blue; position: absolute;"
-      style += "left: " + left_off + "px; top: " + top_off + "px;";
-      style += "width: " + w + "px; height: " + h + "px;";
-      border_div.setAttribute("style", style);
-      main_div.appendChild(border_div);
-    }
+    page = "game";
+    createContainerUI();
+    const {main_div, a, b, w, h, left_off, top_off, letter_font_size} = container_ui;
+    const letter_left_off = left_off + (container_ui.w - 5.4 * a) / 2;
 
     // Create a first row with menu elements.
     {
-      const restart_div = document.createElement("div");
-      let style = "background-color: lightgray; position: absolute; border-radius: " + 0.3  * a + "px;";
-      style += " left: " + (left_off + 0.1 * a) + "px; top: " + (top_off + 0.1 * a) + "px;";
-      style += " width: " + 5.4 * a + "px; height: " + 0.6 * a + "px;";
-      restart_div.setAttribute("style", style);
-      restart_div.innerText = "Restart";
-      main_div.appendChild(restart_div);
-      restart_div.addEventListener("click", startGame);
+      // Create a button to display the statistics.
+      {
+        const style = {"background-color" : "lightgray", "border-radius" : 0.3 * a};
+        show_statistics_div = createDiv(letter_left_off, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Statistics");
+        show_statistics_div.addEventListener("click", showStatistics);
+      }
+
+      // Create a button to restart the game.
+      {
+        const style = {"background-color" : "lightgray", "border-radius" : 0.3 * a};
+        const restart_div = createDiv(letter_left_off + 2.8 * a, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Restart");
+        restart_div.addEventListener("click", startGame);
+      }
     }
 
     // Create six rows with five letters in each row.
@@ -121,18 +159,10 @@
       letter_elements[r] = Array(5);
       for (let c = 0; c < 5; c++)
       {
-        const l = left_off + (0.1 + 1.1 * c) * a;
+        const l = letter_left_off + 1.1 * c * a;
         const t = top_off + (0.8 + 1.1 * r) * a;
-        const elem = document.createElement("div");
-        let style = "position: absolute;";
-        style += " width: " + a + "px; height: " + a + "px;";
-        style += " top: " + t + "px; left: " + l + "px;";
-        style += " font-size: " + letter_font_size + "px;";
-        elem.setAttribute("style", style);
+        const elem = createDiv(l, t, a, a, {}, letter_values[r][c], letter_font_size);
         elem.setAttribute("class", letter_classes[r][c]);
-        elem.innerText = letter_values[r][c];
-        elem.className = letter_classes[r][c];
-        main_div.appendChild(elem);
         letter_elements[r][c] = elem;
       }
     }
@@ -140,35 +170,20 @@
     // Create one row with five solution letters.
     for (let c = 0; c < 5; c++)
     {
-      const l = left_off + (0.1 + 1.1 * c) * a;
+      const l = letter_left_off + 1.1 * c * a;
       const t = top_off + 7.4 * a;
-      const elem = document.createElement("div");
-      let style = "position: absolute;"
-      if (show_debug)
-        style += " background-color: lightgray;"
-      style += "left: " + left_off + "px; top: " + top_off + "px;";
-      style += "width: " + a + "px; height: " + a + "px;";
-      style += " top: " + t + "px; left: " + l + "px;";
-      style += " font-size: " + letter_font_size + "px;";
-      elem.setAttribute("style", style);
-      main_div.appendChild(elem);
+      const style = show_debug ? {"background-color": "lightgray"} : {};
+      const elem = createDiv(l, t, a, a, style, "", letter_font_size);
       solution_letters[c] = elem;
     }
 
     // Create a message area on top of the solution letters.
     {
-      const l = left_off + 0.3 * a;
+      const l = 0.5 * (window.innerWidth - 4.5 * a);
       const t = top_off + 7.6 * a;
-      message_elem = document.createElement("div");
-      let style = "position: absolute;"
-      style += "left: " + left_off + "px; top: " + top_off + "px;";
-      style += "width: " + 5.0 * a + "px; height: " + 0.6 * a + "px;";
-      style += " top: " + t + "px; left: " + l + "px;";
-      style += " border-radius: " + 0.3 * a + "px;";
-      message_elem.setAttribute("style", style);
+      let style = {"border-radius": 0.3 * a};
+      message_elem = createDiv(l, t, 4.5 * a, 0.6 * a, style, message_text);
       message_elem.setAttribute("class", message_class);
-      message_elem.innerText = message_text;
-      main_div.appendChild(message_elem);
     }
 
     // Create a keyboard with three rows.
@@ -183,20 +198,13 @@
       {
         const key_id = row_keys[col].keyId;
         const t = top_off + (8.5 + 1.1 * row) * a;
-        const elem = document.createElement("div");
-        let style = "position: absolute;";
-        style += " width: " + row_keys[col].keyWidth * b + "px; height: " + a + "px;";
-        style += " top: " + t + "px; left: " + l + "px;";
-        style += " border-radius: " + 0.2 * b + "px;";
+        const elem = createDiv(l, t, row_keys[col].keyWidth * b, a, {"border-radius": 0.2 * b}, row_keys[col].keyDisplay);
         let key_class = "letter";
         if (key_classes.has(key_id))
         {
           key_class = key_classes.get(key_id);
         }
-        elem.setAttribute("style", style);
         elem.setAttribute("class", key_class);
-        elem.innerText = row_keys[col].keyDisplay;
-        main_div.appendChild(elem);
         l += (row_keys[col].keyWidth + 0.1) * b;
         keys.set(key_id, elem);
         elem.addEventListener("click", (event) => {processKey(key_id);})
@@ -239,12 +247,20 @@
   // Register event listeners.
   document.addEventListener("DOMContentLoaded", startGame);
   document.addEventListener("keydown", processKeyDown);
-  window.addEventListener("resize", initGameElements);
+  window.addEventListener("resize", processResize);
 
   function startGame()
   {
     initGameState();
     initGameElements();
+  }
+
+  function processResize()
+  {
+    if (page == "statistics")
+      showStatistics()
+    else
+      initGameElements();
   }
 
   function processKeyDown(event)
@@ -344,6 +360,7 @@
           {
             found_word = true;
             setMessageTextAndClass(getWinMessage(), "message-green");
+            statistics[current_row] += 1;
           }
           else if (current_row == 5)
           {
@@ -351,7 +368,9 @@
             {
               solution_letters[c].innerText = solution_word[c];
             }
+            statistics[current_row + 1] += 1;
           }
+          writeStatisticsCookie();
 
           ++current_row;
           current_col = 0;
@@ -378,6 +397,80 @@
     }
     return current_word;
   }
+
+  function readStatisticsCookie()
+  {
+    statistics = Array(7).fill(0);
+    const statistics_str = document.cookie.split("; ").find((row) => row.startsWith("statistics="));
+    if (statistics_str)
+    {
+      const counts = statistics_str.substring(12, statistics_str.length - 1).split(",");
+      if (counts.length == 7)
+      {
+        for (let i = 0; i < 7; ++i)
+        {
+          statistics[i] = +counts[i];
+        }
+      }
+    }
+    return statistics;
+  }
+
+  function writeStatisticsCookie()
+  {
+    document.cookie = "statistics=" + statistics.join(",") + "; samesite=strict; max-age=31536000;";
+  }
+
+  function showStatistics()
+  {
+    page = "statistics";
+    createContainerUI();
+    const {main_div, a, b, w, h, left_off, top_off, letter_font_size} = container_ui;
+    const letter_left_off = left_off + (container_ui.w - 5.4 * a) / 2;
+
+    // Create a button to return to the game.
+    {
+      const style = {"background-color": "lightgray", "border-radius": 0.3  * a};
+      const continue_div = createDiv(letter_left_off, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Continue");
+      continue_div.addEventListener("click", initGameElements);
+    }
+
+    let max_count = 0;
+    let num_games_won = 0;
+    for (let row = 0; row < 6; ++row)
+    {
+      max_count = Math.max(max_count, statistics[row]);
+      num_games_won += statistics[row];
+    }
+    let num_games_lost = statistics[6];
+    let num_games = num_games_won + num_games_lost;
+
+    createDiv(left_off + 0.1 * a, top_off + 1.2 * a,
+              w - 0.2 * a, 0.6 * a, {}, "Game statistics", container_ui.letter_font_size);
+    createDiv(left_off + 0.1 * a, top_off + 2.4 * a,
+              w - 0.2 * a, 0.6 * a, {}, "played / won / lost");
+    createDiv(left_off + 0.1 * a, top_off + 3.0 * a,
+              w - 0.2 * a, 0.6 * a, {}, num_games + " / " + num_games_won + " / " + num_games_lost);
+
+    // Draw bar plot for the guess distribution.
+    if (max_count > 0)
+    {
+      const bar_left_off = 0.5 * (window.innerWidth - 3.9 * a);
+      const scale = 0.4 * h  / max_count;
+      for (let row = 0; row < 6; ++row)
+      {
+        const bar_height = scale * statistics[row];
+        createDiv(bar_left_off + 0.7 * row * a, top_off + h - bar_height - 2 * a,
+                  0.4 * a, bar_height, {"background-color": "lightgray"});
+        createDiv(bar_left_off + 0.7 * row * a, top_off + h - bar_height - 2.4 * a,
+                  0.4 * a, 0.3 * a, {}, statistics[row]);
+        createDiv(bar_left_off + 0.7 * row * a, top_off + h - 2 * a,
+                  0.4 * a, 0.3 * a, {}, row + 1);
+        createDiv(0.5 * (window.innerWidth - w), top_off + h - 1.5 * a,
+                  w, 0.3 * a, {}, "Guess distribution");
+      }
+    }
+ }
 
   function getWordList()
   {
