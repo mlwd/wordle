@@ -1,6 +1,7 @@
 <!DOCTYPE HTML>
 <html>
 <head>
+<title>Play Wordle</title>
 <style type="text/css">
   html {font-family: arial; font-size: 10px; touch-action: none;}
   div {text-align: center; align-content: center; cursor: default; user-select: none;}
@@ -24,14 +25,23 @@
     }
   }
 
-  const letters = Array(6); // Letter elements for each row.
+  var letter_values = Array(6);
+  var letter_classes = Array(6);
+  var key_classes = new Map();
+  for (let row = 0; row < 6; ++row)
+  {
+    letter_values[row] = Array(5).fill("");
+    letter_classes[row] = Array(5).fill("letter");
+  }
+
+  var main_div; // Main drawing area.
+  const letter_elements = Array(6); // Letter elements for each row.
   const solution_letters = Array(5); // One row of letter elements for the solution word.
-  var message_red; // Message area with red background.
-  var message_green; // Message area with green background.
+  var message_red = {visibility: "hidden"}; // Message area with red background.
+  var message_green = {visibility: "hidden"}; // Message area with green background.
   var current_row = 0; // Current input row for letters.
   var current_col = 0; // Current input column for letters.
   const keys = new Map(); // Keyboard elements for A-Z, Enter and Backspace.
-  const key_classes = new Map();
   const word_list = getWordList();
   const solution_word = word_list[Math.floor(Math.random() * word_list.length)]
   var found_word = false; // Whether the correct word has been guessed.
@@ -39,6 +49,11 @@
 
   function createLettersAndKeys()
   {
+    if (main_div)
+      main_div.remove();
+    main_div = document.createElement("div");
+    document.body.appendChild(main_div);
+
     // Calculate letter and keybord dimensions.
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -52,26 +67,25 @@
     // Set font size.
     const letter_font_size = a / 2;
     const font_size = a / 3.5;
-    let body_style = "font-size: " + font_size + "px;";
+    let main_style = "font-size: " + font_size + "px;";
     if (show_debug)
-      body_style += " background-color: red;";
-    document.body.style = body_style;
+      main_style += " background-color: red;";
+    main_div.style = main_style;
 
     if (show_debug)
-    {
-      // Display the bounding box where all elements are placed.
+    { // Display the bounding box where all elements are placed.
       const border_div = document.createElement("div");
       let style = "background-color: blue; position: absolute;"
       style += "left: " + left_off + "px; top: " + top_off + "px;";
       style += "width: " + w + "px; height: " + h + "px;";
       border_div.setAttribute("style", style);
-      document.body.appendChild(border_div);
+      main_div.appendChild(border_div);
     }
 
     // Create six rows with five letters in each row.
     for (let r = 0; r < 6; r++)
     {
-      letters[r] = Array(5);
+      letter_elements[r] = Array(5);
       for (let c = 0; c < 5; c++)
       {
         const l = left_off + (0.1 + 1.1 * c) * a;
@@ -82,9 +96,11 @@
         style += " top: " + t + "px; left: " + l + "px;";
         style += " font-size: " + letter_font_size + "px;";
         elem.setAttribute("style", style);
-        elem.setAttribute("class", "letter");
-        document.body.appendChild(elem);
-        letters[r][c] = elem;
+        elem.setAttribute("class", letter_classes[r][c]);
+        elem.innerText = letter_values[r][c];
+        elem.className = letter_classes[r][c];
+        main_div.appendChild(elem);
+        letter_elements[r][c] = elem;
       }
     }
 
@@ -102,29 +118,28 @@
       style += " top: " + t + "px; left: " + l + "px;";
       style += " font-size: " + letter_font_size + "px;";
       elem.setAttribute("style", style);
-      document.body.appendChild(elem);
+      main_div.appendChild(elem);
       solution_letters[c] = elem;
     }
 
     // Create a message area on top of the solution letters.
-    function createMessageElement(bgcolor)
+    function createMessageElement(message, bgcolor)
     {
       const l = left_off + 0.3 * a;
       const t = top_off + 6.9 * a;
-      const elem = document.createElement("div");
+      message.elem = document.createElement("div");
       let style = "position: absolute;"
       style += "left: " + left_off + "px; top: " + top_off + "px;";
       style += "width: " + 5.0 * a + "px; height: " + 0.6 * a + "px;";
       style += " top: " + t + "px; left: " + l + "px;";
       style += " background-color: " + bgcolor + ";";
       style += " border-radius: " + 0.3 * a + "px;";
-      elem.setAttribute("style", style);
-      elem.style.visibility = "hidden";
-      document.body.appendChild(elem);
-      return elem;
+      message.elem.setAttribute("style", style);
+      setMessageText(message, message.text);
+      main_div.appendChild(message.elem);
     }
-    message_red = createMessageElement("red");
-    message_green = createMessageElement("green");
+    createMessageElement(message_red, "red");
+    createMessageElement(message_green, "green");
 
     // Create a keyboard with three rows.
     function createKeyBoardRow(row, row_keys)
@@ -136,19 +151,25 @@
       let l = left_off + (w - total_key_width * b) * 0.5;
       for (let col = 0; col < row_keys.length; ++col)
       {
+        const key_id = row_keys[col].keyId;
         const t = top_off + (7.8 + 1.1 * row) * a;
         const elem = document.createElement("div");
         let style = "position: absolute;";
         style += " width: " + row_keys[col].keyWidth * b + "px; height: " + a + "px;";
         style += " top: " + t + "px; left: " + l + "px;";
         style += " border-radius: " + 0.2 * b + "px;";
+        let key_class = "letter";
+        if (key_classes.has(key_id))
+        {
+          key_class = key_classes.get(key_id);
+        }
         elem.setAttribute("style", style);
-        elem.setAttribute("class", "letter");
+        elem.setAttribute("class", key_class);
         elem.innerText = row_keys[col].keyDisplay;
-        document.body.appendChild(elem);
+        main_div.appendChild(elem);
         l += (row_keys[col].keyWidth + 0.1) * b;
-        keys.set(row_keys[col].keyId, elem);
-        elem.addEventListener("click", (event) => {processKey(row_keys[col].keyId);})
+        keys.set(key_id, elem);
+        elem.addEventListener("click", (event) => {processKey(key_id);})
       }
     }
 
@@ -187,12 +208,25 @@
 
   // Register event listeners.
   document.addEventListener("DOMContentLoaded", createLettersAndKeys);
-  document.addEventListener("keydown", processKeyDown, false);
+  document.addEventListener("keydown", processKeyDown);
+  window.addEventListener("resize", processResize);
+
+  function processResize()
+  {
+    createLettersAndKeys();
+  }
 
   function processKeyDown(event)
   {
     if (!event.ctrlKey && !event.altKey && !event.metaKey)
       processKey(event.key.toUpperCase());
+  }
+
+  function setMessageText(message, text)
+  {
+    message.elem.innerText = text;
+    message.elem.style.visibility = text ? "visible" : "hidden";
+    message.text = text;
   }
 
   function processKey(key)
@@ -206,17 +240,19 @@
     {
        if (current_col < 5)
        {
-         letters[current_row][current_col].innerText = key;
+         letter_values[current_row][current_col] = key;
+         letter_elements[current_row][current_col].innerText = key;
          ++current_col;
        }
     }
     else if (key == "BACKSPACE")
     {
-      message_red.style.visibility = "hidden";
+      setMessageText(message_red, "");
       if (current_col > 0)
       {
         --current_col;
-        letters[current_row][current_col].innerText = "";
+        letter_values[current_row][current_col] = "";
+        letter_elements[current_row][current_col].innerText = "";
       }
     }
     else if (key == "ENTER")
@@ -226,25 +262,24 @@
         const current_word = getCurrentWord();
         if (!word_list.includes(current_word))
         {
-          message_red.innerText = "Not in word list.";
-          message_red.style.visibility = "visible";
+          setMessageText(message_red, "Not in word list.");
         }
         else
         {
-          const letter_classes = Array(5).fill("letter-excluded");
+          letter_classes[current_row] = Array(5).fill("letter-excluded");
           const letter_used = Array(5).fill(false);
           for (let c = 0; c < 5; ++c)
           {
             if (current_word[c] == solution_word[c])
             {
-              letter_classes[c] = "letter-correct";
+              letter_classes[current_row][c] = "letter-correct";
               letter_used[c] = true;
             }
           }
 
           for (let c = 0; c < 5; ++c)
           {
-            if (letter_classes[c] == "letter-correct")
+            if (letter_classes[current_row][c] == "letter-correct")
               continue;
 
             for (let d = 0; d < 5; ++d)
@@ -254,7 +289,7 @@
 
               if (current_word[c] == solution_word[d])
               {
-                letter_classes[c] = "letter-included";
+                letter_classes[current_row][c] = "letter-included";
                 letter_used[d] = true;
               }
             }
@@ -262,22 +297,21 @@
 
           for (let c = 0; c < 5; ++c)
           {
-            letters[current_row][c].className = letter_classes[c];
+            letter_elements[current_row][c].className = letter_classes[current_row][c];
 
             if (!key_classes.has(current_word[c]) ||
                 key_classes.get(current_word[c]) == "letter-excluded" ||
-                letter_classes[c] == "letter-correct")
+                letter_classes[current_row][c] == "letter-correct")
             {
-              key_classes.set(current_word[c], letter_classes[c]);
-              keys.get(current_word[c]).className = letter_classes[c];
+              key_classes.set(current_word[c], letter_classes[current_row][c]);
+              keys.get(current_word[c]).className = letter_classes[current_row][c];
             }
           }
 
           if (current_word == solution_word)
           {
             found_word = true;
-            message_green.innerText = getWinMessage();
-            message_green.style.visibility = "visible";
+            setMessageText(message_green, getWinMessage());
           }
           else if (current_row == 5)
           {
@@ -308,7 +342,7 @@
     let current_word = "";
     for (let c = 0; c < 5; ++c)
     {
-      current_word += letters[current_row][c].innerText;
+      current_word += letter_elements[current_row][c].innerText;
     }
     return current_word;
   }
