@@ -1,6 +1,15 @@
 function getRandomWordFromList()
 {
+  // Limit the weight of each word to 0.25% of the total weight.
   const word_list = getWordList();
+  const original_total_weight = word_list.reduce((weight, pair) => weight + pair[1], 0);
+  const weight_cap = 0.0025 * original_total_weight;
+  for (word of word_list)
+  {
+    word[1] = Math.min(weight_cap, word[1]);
+  }
+
+  // Recompute total weight and choose a random word.
   const total_weight = word_list.reduce((weight, pair) => weight + pair[1], 0);
   const random_weight = Math.random() * total_weight;
   let cumulative_weight = 0;

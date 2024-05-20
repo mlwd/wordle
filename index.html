@@ -65,6 +65,14 @@
 
     static readStatisticsFromCookie()
     {
+      // Try to load from statistics from local storage.
+      const statistics_from_local_storage = window.localStorage.getItem("statistics");
+      if (statistics_from_local_storage)
+      {
+        return JSON.parse(statistics_from_local_storage)["counts"];
+      }
+
+      // Otherwise read the cookie.
       const statistics = Array(7).fill(0);
       const statistics_str = document.cookie.split("; ").find((row) => row.startsWith("statistics="));
       if (statistics_str)
@@ -81,9 +89,9 @@
       return statistics;
     }
 
-    writeStatisticsToCookie()
+    writeStatisticsToLocalStorage()
     {
-      document.cookie = "statistics=" + this.statistics.join(",") + "; samesite=strict; max-age=31536000;";
+      window.localStorage.setItem("statistics", JSON.stringify({"counts": this.statistics}));
     }
   }
 
@@ -381,6 +389,7 @@
             st.found_word = true;
             setMessageTextAndClass(getWinMessage(), "message-green");
             st.statistics[st.current_row] += 1;
+            st.writeStatisticsToLocalStorage();
           }
           else if (st.current_row == 5)
           {
@@ -389,8 +398,8 @@
               solution_letters[c].innerText = st.solution_word[c];
             }
             st.statistics[st.current_row + 1] += 1;
+            st.writeStatisticsToLocalStorage();
           }
-          st.writeStatisticsToCookie();
 
           ++st.current_row;
           st.current_col = 0;
