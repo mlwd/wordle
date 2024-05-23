@@ -6,11 +6,11 @@
   html {font-family: arial; font-size: 10px; touch-action: none;}
   div {text-align: center; align-content: center; cursor: default; user-select: none;}
   .letter {background-color: lightgray;}
-  .letter-correct {background-color: darkgreen;}
-  .letter-included {background-color: gold;}
-  .letter-excluded {background-color: gray;}
-  .message-red {background-color: red;}
-  .message-green {background-color: darkgreen;}
+  .letter-correct {background-color: darkgreen; transition: background-color 0.6s;}
+  .letter-included {background-color: gold; transition: background-color 0.6s;}
+  .letter-excluded {background-color: gray; transition: background-color 0.6s;}
+  .message-red {background-color: red; transition: background-color 0.2s;}
+  .message-green {background-color: darkgreen; transition: background-color 0.2s;}
   .message-invisible {visibility: hidden;}
 </style>
 <script src="wordlist.js"></script>
@@ -39,60 +39,43 @@
   var message_elem; // Message element to show texts for the user.
   const keys = new Map(); // Keyboard elements for A-Z, Enter and Backspace.
 
-  class GameState {
-    constructor () {
-      this.current_row = 0; // The current input row.
-      this.current_col = 0; // The current input column.
-      this.letter_values = Array(6);  // Letters which have been typed.
-      this.letter_classes = Array(6); // CSS classes for each typed letter.
-      for (let row = 0; row < 6; ++row)
-      {
-        this.letter_values[row] = Array(5).fill("");
-        this.letter_classes[row] = Array(5).fill("letter");
-      }
-      this.key_classes = new Map();   // CSS class for each key id.
-
-      this.message_class = "message-invisible"; // CSS class for the message element.
-      this.message_text = ""; // Text for the message element.
-      // Generate random solution word.
-      this.solution_word = getRandomWordFromList();
-      console.log("Solution: " + this.solution_word);
-
-      this.found_word = false;  // Whether the correct word has been guessed.
-      this.page = "game";       // Either "game" or "statistics".
-      this.statistics = GameState.readStatisticsFromCookie();
-    }
-
-    static readStatisticsFromCookie()
+  function createGameState()
+  {
+    const old_st = st;
+    st = {}
+    st.current_row = 0; // The current input row.
+    st.current_col = 0; // The current input column.
+    st.letter_values = Array(6);  // Letters which have been typed.
+    st.letter_classes = Array(6); // CSS classes for each typed letter.
+    for (let row = 0; row < 6; ++row)
     {
-      // Try to load from statistics from local storage.
-      const statistics_from_local_storage = window.localStorage.getItem("statistics");
-      if (statistics_from_local_storage)
-      {
-        return JSON.parse(statistics_from_local_storage)["counts"];
-      }
-
-      // Otherwise read the cookie.
-      const statistics = Array(7).fill(0);
-      const statistics_str = document.cookie.split("; ").find((row) => row.startsWith("statistics="));
-      if (statistics_str)
-      {
-        const counts = statistics_str.substring(11, statistics_str.length).split(",");
-        if (counts.length == 7)
-        {
-          for (let i = 0; i < 7; ++i)
-          {
-            statistics[i] = +counts[i];
-          }
-        }
-      }
-      return statistics;
+      st.letter_values[row] = Array(5).fill("");
+      st.letter_classes[row] = Array(5).fill("letter");
     }
+    st.key_classes = {}; // CSS class for each key id.
 
-    writeStatisticsToLocalStorage()
-    {
-      window.localStorage.setItem("statistics", JSON.stringify({"counts": this.statistics}));
-    }
+    st.message_class = "message-invisible"; // CSS class for the message element.
+    st.message_text = ""; // Text for the message element.
+    // Generate random solution word.
+    st.solution_word = getRandomWordFromList();
+
+    st.found_word = false;  // Whether the correct word has been guessed.
+    st.page = "game";       // Either "game" or "statistics".
+    st.statistics = old_st ? old_st.statistics : Array(7).fill(0);
+  }
+
+  function saveGameStateToLocalStorage()
+  {
+    window.localStorage.setItem("st", JSON.stringify(st));
+  }
+
+  function loadGameStateFromLocalStorage()
+  {
+    const new_st_json = window.localStorage.getItem("st");
+    if (new_st_json)
+      st = JSON.parse(new_st_json);
+    else
+      createGameState();
   }
 
   function createContainerUI()
@@ -226,11 +209,12 @@
       {
         const key_id = row_keys[col].keyId;
         const t = top_off + (8.5 + 1.1 * row) * a;
-        const elem = ui.createDiv(l, t, row_keys[col].keyWidth * b, a, {"border-radius": 0.2 * b}, row_keys[col].keyDisplay);
+        const style = {"border-radius": 0.2 * b};
+        const elem = ui.createDiv(l, t, row_keys[col].keyWidth * b, a, style, row_keys[col].keyDisplay);
         let key_class = "letter";
-        if (st.key_classes.has(key_id))
+        if (key_id in st.key_classes)
         {
-          key_class = st.key_classes.get(key_id);
+          key_class = st.key_classes[key_id];
         }
         elem.setAttribute("class", key_class);
         l += (row_keys[col].keyWidth + 0.1) * b;
@@ -273,14 +257,24 @@
   }
 
   // Register event listeners.
-  document.addEventListener("DOMContentLoaded", startGame);
+  document.addEventListener("DOMContentLoaded", resumeGame);
   document.addEventListener("keydown", processKeyDown);
   window.addEventListener("resize", processResize);
 
+  function resumeGame()
+  {
+    loadGameStateFromLocalStorage();
+    saveGameStateToLocalStorage();
+    initGameElements();
+    console.log("Solution: " + st.solution_word);
+  }
+
   function startGame()
   {
-    st = new GameState();
+    createGameState();
+    saveGameStateToLocalStorage();
     initGameElements();
+    console.log("Solution: " + st.solution_word);
   }
 
   function processResize()
@@ -375,11 +369,11 @@
           {
             letter_elements[st.current_row][c].className = st.letter_classes[st.current_row][c];
 
-            if (!st.key_classes.has(current_word[c]) ||
-                st.key_classes.get(current_word[c]) == "letter-excluded" ||
+            if (!(current_word[c] in st.key_classes) ||
+                st.key_classes[current_word[c]] == "letter-excluded" ||
                 st.letter_classes[st.current_row][c] == "letter-correct")
             {
-              st.key_classes.set(current_word[c], st.letter_classes[st.current_row][c]);
+              st.key_classes[current_word[c]] = st.letter_classes[st.current_row][c];
               keys.get(current_word[c]).className = st.letter_classes[st.current_row][c];
             }
           }
@@ -389,7 +383,6 @@
             st.found_word = true;
             setMessageTextAndClass(getWinMessage(), "message-green");
             st.statistics[st.current_row] += 1;
-            st.writeStatisticsToLocalStorage();
           }
           else if (st.current_row == 5)
           {
@@ -398,11 +391,11 @@
               solution_letters[c].innerText = st.solution_word[c];
             }
             st.statistics[st.current_row + 1] += 1;
-            st.writeStatisticsToLocalStorage();
           }
 
           ++st.current_row;
           st.current_col = 0;
+          saveGameStateToLocalStorage();
         }
       }
     }
