@@ -39,10 +39,13 @@
   var message_elem; // Message element to show texts for the user.
   const keys = new Map(); // Keyboard elements for A-Z, Enter and Backspace.
 
-  function createGameState()
+  function createGameState(language)
   {
     const old_st = st;
     st = {}
+    st.language = language; // Language for guessed words: EN or DE.
+    if (!st.language)
+      st.language = old_st ? old_st.language : "EN";
     st.current_row = 0; // The current input row.
     st.current_col = 0; // The current input column.
     st.letter_values = Array(6);  // Letters which have been typed.
@@ -57,7 +60,7 @@
     st.message_class = "message-invisible"; // CSS class for the message element.
     st.message_text = ""; // Text for the message element.
     // Generate random solution word.
-    st.solution_word = getRandomWordFromList();
+    st.solution_word = getWordList(st.language).getRandomWord();
 
     st.found_word = false;  // Whether the correct word has been guessed.
     st.page = "game";       // Either "game" or "statistics".
@@ -80,6 +83,9 @@
       {
         st.statistics = createStatistics(st.statistics);
       }
+      // Set default language.
+      if (!st.language)
+        st.language = "EN";
     }
     else
       createGameState();
@@ -110,7 +116,6 @@
       const height = debug_height || window.innerHeight;
       this.a = Math.min(width / 5.6, height / 11.8);
       this.w = Math.max(5.6 * this.a, width);
-      this.b = this.w / 11.1;
       this.h = 11.8 * this.a;
       this.left_off = 0.5 * Math.max(window.innerWidth - width, 0.);
       this.top_off = 0.5 * Math.max(height - 11.8 * this.a, 0.);
@@ -160,7 +165,7 @@
   {
     st.page = "game";
     createContainerUI();
-    const {main_div, a, b, w, h, left_off, top_off, letter_font_size} = ui;
+    const {main_div, a, w, h, left_off, top_off, letter_font_size} = ui;
     const letter_left_off = left_off + (ui.w - 5.4 * a) / 2;
 
     // Create a first row with menu elements.
@@ -168,15 +173,22 @@
       // Create a button to display the statistics.
       {
         const style = {"background-color" : "lightgray", "border-radius" : 0.3 * a + "px"};
-        show_statistics_div = ui.createDiv(letter_left_off, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Statistics");
+        show_statistics_div = ui.createDiv(letter_left_off, top_off + 0.1 * a, 2.0 * a, 0.6 * a, style, "Statistics");
         show_statistics_div.addEventListener("click", showStatistics);
+      }
+
+      // Create a button to toggle the language.
+      {
+        const style = {"background-color" : "lightgray", "border-radius" : 0.3 * a + "px"};
+        toggle_language_div = ui.createDiv(letter_left_off + 2.1 * a, top_off + 0.1 * a, 1.2 * a, 0.6 * a, style, st.language);
+        toggle_language_div.addEventListener("click", toggleLanguage);
       }
 
       // Create a button to restart the game.
       {
         const style = {"background-color" : "lightgray", "border-radius" : 0.3 * a + "px"};
-        const restart_div = ui.createDiv(letter_left_off + 2.8 * a, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Restart");
-        restart_div.addEventListener("click", startGame);
+        const restart_div = ui.createDiv(letter_left_off + 3.4 * a, top_off + 0.1 * a, 2.0 * a, 0.6 * a, style, "Restart");
+        restart_div.addEventListener("click", (event) => {startGame();});
       }
     }
 
@@ -214,62 +226,86 @@
     }
 
     // Create a keyboard with three rows.
-    function createKeyBoardRow(row, row_keys)
+    function createKeyBoardRow(row, row_keys, max_keys_per_row)
     {
-      let total_key_width = 0.1 * (row_keys.length - 1);
+      const b = w / (-0.1 + 1.1 * max_keys_per_row);
+      let total_key_width = 0.1 * b * (row_keys.length - 1);
+      let num_stretch_keys = 0;
       for (let col = 0; col < row_keys.length; ++col)
-        total_key_width += row_keys[col].keyWidth;
+      {
+        if (row_keys[col].isStretchKey)
+          num_stretch_keys += 1;
+        else
+          total_key_width += b;
+      }
 
-      let l = left_off + (w - total_key_width * b) * 0.5;
+      let stretch_key_width = 0.;
+      if (num_stretch_keys)
+      {
+        stretch_key_width = (w - total_key_width) / num_stretch_keys;
+        total_key_width = w;
+      }
+
+      let l = left_off + 0.5 * (w - total_key_width);
       for (let col = 0; col < row_keys.length; ++col)
       {
         const key_id = row_keys[col].keyId;
         const t = top_off + (8.5 + 1.1 * row) * a;
         const style = {"border-radius": 0.2 * b + "px"};
-        const elem = ui.createDiv(l, t, row_keys[col].keyWidth * b, a, style, row_keys[col].keyDisplay);
+        const computed_key_width = row_keys[col].isStretchKey ? stretch_key_width : b;
+        const elem = ui.createDiv(l, t, computed_key_width, a, style, row_keys[col].keyDisplay);
         let key_class = "letter";
         if (key_id in st.key_classes)
         {
           key_class = st.key_classes[key_id];
         }
         elem.setAttribute("class", key_class);
-        l += (row_keys[col].keyWidth + 0.1) * b;
+        l += computed_key_width + 0.1 * b;
         keys.set(key_id, elem);
         elem.addEventListener("click", (event) => {processKey(key_id);})
       }
     }
 
-    const keys_0 = [{keyId: "Q", keyDisplay: "Q", keyWidth: 1.0},
-                    {keyId: "W", keyDisplay: "W", keyWidth: 1.0},
-                    {keyId: "E", keyDisplay: "E", keyWidth: 1.0},
-                    {keyId: "R", keyDisplay: "R", keyWidth: 1.0},
-                    {keyId: "T", keyDisplay: "T", keyWidth: 1.0},
-                    {keyId: "Y", keyDisplay: "Y", keyWidth: 1.0},
-                    {keyId: "U", keyDisplay: "U", keyWidth: 1.0},
-                    {keyId: "I", keyDisplay: "I", keyWidth: 1.0},
-                    {keyId: "O", keyDisplay: "O", keyWidth: 1.0},
-                    {keyId: "P", keyDisplay: "P", keyWidth: 1.0}];
-    const keys_1 = [{keyId: "A", keyDisplay: "A", keyWidth: 1.0},
-                    {keyId: "S", keyDisplay: "S", keyWidth: 1.0},
-                    {keyId: "D", keyDisplay: "D", keyWidth: 1.0},
-                    {keyId: "F", keyDisplay: "F", keyWidth: 1.0},
-                    {keyId: "G", keyDisplay: "G", keyWidth: 1.0},
-                    {keyId: "H", keyDisplay: "H", keyWidth: 1.0},
-                    {keyId: "J", keyDisplay: "J", keyWidth: 1.0},
-                    {keyId: "K", keyDisplay: "K", keyWidth: 1.0},
-                    {keyId: "L", keyDisplay: "L", keyWidth: 1.0}];
-    const keys_2 = [{keyId: "ENTER", keyDisplay: "Enter", keyWidth: 1.55},
-                    {keyId: "Z", keyDisplay: "Z", keyWidth: 1.0},
-                    {keyId: "X", keyDisplay: "X", keyWidth: 1.0},
-                    {keyId: "C", keyDisplay: "C", keyWidth: 1.0},
-                    {keyId: "V", keyDisplay: "V", keyWidth: 1.0},
-                    {keyId: "B", keyDisplay: "B", keyWidth: 1.0},
-                    {keyId: "N", keyDisplay: "N", keyWidth: 1.0},
-                    {keyId: "M", keyDisplay: "M", keyWidth: 1.0},
-                    {keyId: "BACKSPACE", keyDisplay: "Back", keyWidth: 1.55}];
-    createKeyBoardRow(0, keys_0);
-    createKeyBoardRow(1, keys_1);
-    createKeyBoardRow(2, keys_2);
+    // Array describing the keyboard layout.
+    const key_rows = Array(3);
+    key_rows[0] = [{keyId: "Q", keyDisplay: "Q", isStretchKey: false},
+                   {keyId: "W", keyDisplay: "W", isStretchKey: false},
+                   {keyId: "E", keyDisplay: "E", isStretchKey: false},
+                   {keyId: "R", keyDisplay: "R", isStretchKey: false},
+                   {keyId: "T", keyDisplay: "T", isStretchKey: false},
+                   {keyId: "Y", keyDisplay: "Y", isStretchKey: false},
+                   {keyId: "U", keyDisplay: "U", isStretchKey: false},
+                   {keyId: "I", keyDisplay: "I", isStretchKey: false},
+                   {keyId: "O", keyDisplay: "O", isStretchKey: false},
+                   {keyId: "P", keyDisplay: "P", isStretchKey: false}];
+    key_rows[1] = [{keyId: "A", keyDisplay: "A", isStretchKey: false},
+                   {keyId: "S", keyDisplay: "S", isStretchKey: false},
+                   {keyId: "D", keyDisplay: "D", isStretchKey: false},
+                   {keyId: "F", keyDisplay: "F", isStretchKey: false},
+                   {keyId: "G", keyDisplay: "G", isStretchKey: false},
+                   {keyId: "H", keyDisplay: "H", isStretchKey: false},
+                   {keyId: "J", keyDisplay: "J", isStretchKey: false},
+                   {keyId: "K", keyDisplay: "K", isStretchKey: false},
+                   {keyId: "L", keyDisplay: "L", isStretchKey: false}];
+    if (st.language == "DE")
+    {
+      key_rows[0].push({keyId: "Ü", keyDisplay: "Ü", isStretchKey: false});
+      key_rows[1].push({keyId: "Ö", keyDisplay: "Ö", isStretchKey: false});
+      key_rows[1].push({keyId: "Ä", keyDisplay: "Ä", isStretchKey: false});
+    }
+    key_rows[2] = [{keyId: "ENTER", keyDisplay: "Enter", isStretchKey: true},
+                   {keyId: "Z", keyDisplay: "Z", isStretchKey: false},
+                   {keyId: "X", keyDisplay: "X", isStretchKey: false},
+                   {keyId: "C", keyDisplay: "C", isStretchKey: false},
+                   {keyId: "V", keyDisplay: "V", isStretchKey: false},
+                   {keyId: "B", keyDisplay: "B", isStretchKey: false},
+                   {keyId: "N", keyDisplay: "N", isStretchKey: false},
+                   {keyId: "M", keyDisplay: "M", isStretchKey: false},
+                   {keyId: "BACKSPACE", keyDisplay: "Back", isStretchKey: true}];
+    const max_keys_per_row = Math.max(key_rows[0].length, key_rows[1].length, key_rows[2].length);
+    createKeyBoardRow(0, key_rows[0], max_keys_per_row);
+    createKeyBoardRow(1, key_rows[1], max_keys_per_row);
+    createKeyBoardRow(2, key_rows[2], max_keys_per_row);
   }
 
   // Register event listeners.
@@ -285,9 +321,9 @@
     console.log("Solution: " + st.solution_word);
   }
 
-  function startGame()
+  function startGame(language)
   {
-    createGameState();
+    createGameState(language);
     saveGameStateToLocalStorage();
     initGameElements();
     console.log("Solution: " + st.solution_word);
@@ -317,9 +353,11 @@
 
   function processKey(key)
   {
-    const abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" + (st.language == "DE" ? "ÄÖÜ" : "");
     if (st.found_word || st.current_row >= 6)
     {
+      if (key == "BACKSPACE" || key == "ENTER")
+        startGame();
       return;
     }
     if (abc.includes(key))
@@ -346,8 +384,9 @@
       if (st.current_row < 6 && st.current_col == 5)
       {
         const current_word = getCurrentWord();
-        if (!isWordInList(current_word))
+        if (!getWordList([st.language]).containsWord(current_word))
         {
+          console.log("num_words = " + getWordList(st.language).length);
           setMessageTextAndClass("Not in word list.", "message-red");
         }
         else
@@ -441,17 +480,24 @@
     return current_word;
   }
 
+  function toggleLanguage()
+  {
+    const new_language = st.language == "EN" ? "DE" : "EN";
+    console.log("New language: " + new_language);
+    startGame(new_language);
+  }
+
   function showStatistics()
   {
     st.page = "statistics";
     createContainerUI();
-    const {main_div, a, b, w, h, left_off, top_off, letter_font_size} = ui;
+    const {main_div, a, w, h, left_off, top_off, letter_font_size} = ui;
     const letter_left_off = left_off + (ui.w - 5.4 * a) / 2;
 
     // Create a button to return to the game.
     {
       const style = {"background-color": "lightgray", "border-radius": 0.3  * a + "px"};
-      const continue_div = ui.createDiv(letter_left_off, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Continue");
+      const continue_div = ui.createDiv(letter_left_off + 1.4 * a, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Continue");
       continue_div.addEventListener("click", initGameElements);
     }
 
