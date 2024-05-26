@@ -159,6 +159,15 @@
     }
   }
 
+  function translate(en_str, de_str)
+  {
+    if (st.language == "EN")
+      return en_str;
+    if (st.language == "DE")
+      return de_str;
+    return "";
+  }
+
   // Creates the necessary DOM elements for the game.
   // The state of the game is not modified.
   function initGameElements()
@@ -173,7 +182,8 @@
       // Create a button to display the statistics.
       {
         const style = {"background-color" : "lightgray", "border-radius" : 0.3 * a + "px"};
-        show_statistics_div = ui.createDiv(letter_left_off, top_off + 0.1 * a, 2.0 * a, 0.6 * a, style, "Statistics");
+        show_statistics_div = ui.createDiv(letter_left_off, top_off + 0.1 * a, 2.0 * a, 0.6 * a, style,
+                                           translate("Statistics", "Statistik"));
         show_statistics_div.addEventListener("click", showStatistics);
       }
 
@@ -187,7 +197,8 @@
       // Create a button to restart the game.
       {
         const style = {"background-color" : "lightgray", "border-radius" : 0.3 * a + "px"};
-        const restart_div = ui.createDiv(letter_left_off + 3.4 * a, top_off + 0.1 * a, 2.0 * a, 0.6 * a, style, "Restart");
+        const restart_div = ui.createDiv(letter_left_off + 3.4 * a, top_off + 0.1 * a, 2.0 * a, 0.6 * a, style,
+                                         translate("Restart", "Neustart"));
         restart_div.addEventListener("click", (event) => {startGame();});
       }
     }
@@ -387,7 +398,7 @@
         if (!getWordList([st.language]).containsWord(current_word))
         {
           console.log("num_words = " + getWordList(st.language).length);
-          setMessageTextAndClass("Not in word list.", "message-red");
+          setMessageTextAndClass(translate("Not in word list.", "Nicht in der Wortliste."), "message-red");
         }
         else
         {
@@ -465,8 +476,14 @@
   function getWinMessage()
   {
     const win_messages = [
-      "Congratulations!", "You guessed it!", "Good job!", "Nice!",
-      "You won the game!", "That's the word!", "Solved!"];
+      translate("Congratulations!", "Gratulation!"),
+      translate("You guessed it!", "Erraten!"),
+      translate("Good job!", "Gute Arbeit!"),
+      translate("Nice!", "Sehr gut!"),
+      translate("You won the game!", "Du hast gewonnen!"),
+      translate("That's the word!", "Das ist das Wort!"),
+      translate("Solved!", "Gelöst!"),
+      ];
     return win_messages[Math.floor(Math.random() * win_messages.length)]
   }
 
@@ -497,7 +514,8 @@
     // Create a button to return to the game.
     {
       const style = {"background-color": "lightgray", "border-radius": 0.3  * a + "px"};
-      const continue_div = ui.createDiv(letter_left_off + 1.4 * a, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style, "Continue");
+      const continue_div = ui.createDiv(letter_left_off + 1.4 * a, top_off + 0.1 * a, 2.6 * a, 0.6 * a, style,
+                                       translate("Continue", "Weiter"));
       continue_div.addEventListener("click", initGameElements);
     }
 
@@ -515,21 +533,21 @@
     const stat_w = 5.6 * a;
     const stat_left_off = left_off + (w - stat_w) / 2;
     ui.createDiv(stat_left_off, top_off + 1.2 * a,
-                 stat_w, 0.6 * a, {}, "Game statistics", ui.letter_font_size);
+                 stat_w, 0.6 * a, {}, translate("Statistics", "Statistik"), ui.letter_font_size);
 
     // Display played/ won/ lost counts.
     ui.createDiv(stat_left_off, top_off + 2.4 * a,
-                 stat_w / 3, 0.6 * a, {}, "played<br>" + num_games);
+                 stat_w / 3, 0.6 * a, {}, translate("played", "Spiele") + "<br>" + num_games);
     ui.createDiv(stat_left_off + stat_w / 3, top_off + 2.4 * a,
-                 stat_w / 3, 0.6 * a, {}, "won<br>" + num_games_won);
+                 stat_w / 3, 0.6 * a, {}, translate("won", "Siege") + "<br>" + num_games_won);
     ui.createDiv(stat_left_off + 2 * stat_w / 3, top_off + 2.4 * a,
-                 stat_w / 3, 0.6 * a, {}, "lost<br>" + num_games_lost);
+                 stat_w / 3, 0.6 * a, {}, translate("lost", "Niederlagen") + "<br>" + num_games_lost);
 
     // Display streak statistics.
     ui.createDiv(stat_left_off, top_off + 3.4 * a,
-                 stat_w / 2, 0.6 * a, {}, "streak<br>" + st.statistics.current_streak);
+                 stat_w / 2, 0.6 * a, {}, translate("streak", "Serie") + "<br>" + st.statistics.current_streak);
     ui.createDiv(stat_left_off + stat_w / 2, top_off + 3.4 * a,
-                 stat_w / 2, 0.6 * a, {}, "max. streak<br>" + st.statistics.max_streak);
+                 stat_w / 2, 0.6 * a, {}, translate("max streak", "Längste Serie") + "<br>" + st.statistics.max_streak);
 
     // Draw bar plot for the guess distribution.
     if (max_count > 0)
@@ -538,16 +556,16 @@
       const scale = 0.4 * h  / max_count;
       for (let row = 0; row < 6; ++row)
       {
-        const bar_height = scale * st.statistics.num_guesses[row];
+        const bar_height = 0.05 * a + scale * st.statistics.num_guesses[row];
         ui.createDiv(bar_left_off + 0.7 * row * a, top_off + h - bar_height - 2 * a,
                   0.4 * a, bar_height, {"background-color": "lightgray"});
         ui.createDiv(bar_left_off + 0.7 * row * a, top_off + h - bar_height - 2.4 * a,
                   0.4 * a, 0.3 * a, {}, st.statistics.num_guesses[row]);
         ui.createDiv(bar_left_off + 0.7 * row * a, top_off + h - 2 * a,
                   0.4 * a, 0.3 * a, {}, row + 1);
-        ui.createDiv(0.5 * (window.innerWidth - w), top_off + h - 1.5 * a,
-                  w, 0.3 * a, {}, "Guess distribution");
       }
+      ui.createDiv(0.5 * (window.innerWidth - w), top_off + h - 1.5 * a,
+                   w, 0.3 * a, {}, translate("Number of Guesses", "Versuchsanzahl"));
     }
  }
 
